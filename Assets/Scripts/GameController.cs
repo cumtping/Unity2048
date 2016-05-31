@@ -3,7 +3,7 @@ using System.Collections;
 
 public class GameController : MonoBehaviour {
 	bool testMode = false;
-	bool isDebug = false;
+	bool isDebug = true;
 	float spawnDelay = 1.0F;
 	int xNum = 4, yNum = 4;
 	int blockSize = 240;
@@ -25,6 +25,13 @@ public class GameController : MonoBehaviour {
 	Vector2 gameBoardCenter;
 	// block发生移动或相加
 	bool blockMovedOrAdded;
+	/// <优化随机位置生成>
+	/// 0、Random方法设置seed；
+	/// 1、将block从上到下、从左到右编码，依次是1~16；
+	/// 2、每次移动完成，记录当前空闲的位置；
+	/// 3，在当前空闲的位置随机生成新的；
+	ArrayList emptyBlockList = new ArrayList();
+	/// </优化随机位置生成>
 
 	void Start () {
 		init ();
@@ -39,7 +46,8 @@ public class GameController : MonoBehaviour {
 	void spawnTestBlock () {
 		bool testFullHorizontal = false;
 		bool testFullVertical = true;
-		int exception1 = 1;
+		bool testArray = false;
+		int exception1 = -1;
 		int exception2 = 2;
 
 		if (testFullHorizontal) {
@@ -56,8 +64,22 @@ public class GameController : MonoBehaviour {
 				}
 			}
 		}
+		if (testArray) {
+			int[,] indexArray = new int[4, 4]{ { 2, 3, 4, 6 }, { 1, 2, 3, 4 }, { 0, 1, 2, 3 }, { 0, 0, 0, 0 } };
+			initGameBoard (indexArray);
+		}
 	}
 	/// </test methods>
+
+	void initGameBoard(int[,] indexArray){
+		for (int i = 0; i < xNum; i++) {
+			for (int j = 0; j < yNum; j++) {
+				if (indexArray [i, j] != 0) {
+					createOneBlock (i, j, indexArray [i, j]);
+				}
+			}
+		}
+	}
 
 	void init() {
 		// （0, 0）点中心距GameBoard正中心的位置
@@ -71,6 +93,8 @@ public class GameController : MonoBehaviour {
 			block6Prefab, block7Prefab, block8Prefab, block9Prefab, block10Prefab,
 			block11Prefab, block12Prefab, block13Prefab, block14Prefab, block15Prefab,
 			block16Prefab, block17Prefab, block18Prefab, block19Prefab, block20Prefab};
+
+		fillEmptyBlockList ();
 	}
 
 	void Update () {
@@ -87,6 +111,7 @@ public class GameController : MonoBehaviour {
 			float moveY = upPos.y - mouseDownPos.y;
 			if (Mathf.Abs (moveX) > 10 && Mathf.Abs (moveY) > 10) {
 				blockMovedOrAdded = false;
+				if (isDebug) Debug.Log ("=========START===================================");
 
 				if (Mathf.Abs (moveX) > Mathf.Abs (moveY)) {
 					if (moveX > 0) {
@@ -105,6 +130,9 @@ public class GameController : MonoBehaviour {
 						moveBlocksDown ();
 					}
 				}
+				fillEmptyBlockList ();
+
+				if (isDebug) Debug.Log ("=========END===================================");
 				if (!testMode && blockMovedOrAdded) {
 					StartCoroutine (waitAndSpawnTwoBlock (spawnDelay));
 				}
@@ -117,27 +145,55 @@ public class GameController : MonoBehaviour {
 		spawnTwoBlock ();
 	}
 
+	// 将空白方块编号存入emptyBlockList
+	void fillEmptyBlockList(){
+		emptyBlockList.Clear ();
+		for (int x = 0; x < xNum; x++) {
+			for (int y = 0; y < yNum; y++) {
+				if (0 == blockIndexArray [x, y]) {
+					emptyBlockList.Add (x * xNum + y + 1);
+				}
+			}
+		}
+	}
+
+	// 从空白方块中随机选定一个
+	int pickOneEmptyBlock(){
+		if (emptyBlockList.Count == 0) {
+			return 0;
+		} else {
+			int x = Random.Range (0, emptyBlockList.Count - 1);
+			int index = (int)emptyBlockList [x];
+			emptyBlockList.RemoveAt (x);
+			return index;
+		}
+	}
+
+	// 空白方块对应坐标
+	Vector2 indexToPosition(int index){
+		if (0 == index) {
+			return new Vector2(-1, -1);
+		} else {
+			return new Vector2 ((index - 1) / xNum, (index - 1) % xNum);
+		}
+	}
+
 	// 生成标2的方格，若成功生成返回true；若没有空间返回false;
 	bool spawnTwoBlock() {
 		for (int i = 1; i <= 2; i++) {
-			if (isGameOver ()) {
-				return false;
+			Vector2 position = indexToPosition (pickOneEmptyBlock ());
+			if ((int)position.x != -1) {
+				createOneBlock ((int)position.x, (int)position.y, 1);
+			} else {
+				if (isDebug) Debug.Log ("======================= no empty position =================");
 			}
-			int x = Random.Range (0, xNum - 1);
-			int y = Random.Range (0, yNum - 1);
-			while (blockIndexArray [x, y] != 0) {
-				x = Random.Range (0, xNum - 1);
-				y = Random.Range (0, yNum - 1);
-			}
-
-			createOneBlock (x, y, 1);
 		}
 		return true;
 	}
 
 	// 在第x行y列创建一个方格
 	void createOneBlock(int x, int y, int blockIndex) {
-		if (blockIndex < 0 || blockIndex > blockPrefabs.Length || null == blockPrefabs[blockIndex]) {
+		if (blockIndex < 1 || blockIndex > blockPrefabs.Length || null == blockPrefabs[blockIndex]) {
 			Debug.Log ("createOneBlock, blockIndex out of bound!");
 			return;
 		}
@@ -196,10 +252,11 @@ public class GameController : MonoBehaviour {
 						if (added) {
 							y = i - 1;
 						}
+						break;
 					}
 				}
 			}
-			for (int y = yNum - 1; y >= 0; y--) {
+			for (int y = yNum - 2; y >= 0; y--) {
 				if (blockIndexArray [x, y] != 0) {
 					for (int i = yNum - 1; i > y; i--) {
 						if (0 == blockIndexArray [x, i]) {
@@ -218,7 +275,7 @@ public class GameController : MonoBehaviour {
 			for (int y = 0; y < yNum; y++) {
 				if (blockIndexArray [x, y] != 0) {
 					// 与下面第一个不为空的方块数字一致，相加；(每一列只加一次)
-					for (int i = y + 1; y < yNum; i++) {
+					for (int i = y + 1; i < yNum; i++) {
 						if (0 == blockIndexArray [x, i]) {
 							continue;
 						}
@@ -226,10 +283,11 @@ public class GameController : MonoBehaviour {
 						if (added) {
 							y = i + 1;
 						}
+						break;
 					}
 				}
 			}
-			for (int y = 0; y < yNum; y++) {
+			for (int y = 1; y < yNum; y++) {
 				if (blockIndexArray [x, y] != 0) {
 					for (int i = 0; i < y; i++) {
 						if (0 == blockIndexArray [x, i]) {
@@ -256,11 +314,12 @@ public class GameController : MonoBehaviour {
 						if (added) {
 							x = i - 1;
 						}
+						break;
 					}
 				}
 			}
 
-			for (int x = xNum - 1; x >= 0; x--) {
+			for (int x = xNum - 2; x >= 0; x--) {
 				if (blockIndexArray [x, y] != 0) {
 					for (int i = xNum - 1; i > x; i--) {
 						if (0 == blockIndexArray [i, y]) {
@@ -277,9 +336,6 @@ public class GameController : MonoBehaviour {
 	void moveBlocksLeft(){
 		for (int y = 0; y < yNum; y++) {
 			for (int x = 0; x < xNum; x++) {
-				if (y == 1) {
-					if(isDebug) Debug.Log ("before move: blockIndexArray[" + x + ", " + y + "] = " + blockIndexArray [x, y]);
-				}
 				if (blockIndexArray [x, y] != 0) {
 					// 与右面第一个不为空的方块数字一致，相加；(每一行只加一次)
 					for (int i = x + 1; i < xNum; i++) {
@@ -290,10 +346,8 @@ public class GameController : MonoBehaviour {
 						if (added) {
 							x = i + 1;
 						}
+						break;
 					}
-				}
-				if (y == 1) {
-					if(isDebug) Debug.Log ("after move: blockIndexArray[" + x + ", " + y + "] = " + blockIndexArray [x, y]);
 				}
 			}
 
@@ -310,12 +364,14 @@ public class GameController : MonoBehaviour {
 		}
 	}
 
-	// 将两个数字相同的非空block相加，前者保留，后者销毁
+	// 将两个数字相同、非空且位置不同的block相加，前者保留，后者销毁
 	// true：成功相加；false：未相加；
 	bool addTwoBlock(int toX, int toY, int fromX, int fromY){
-		if(isDebug) Debug.Log ("before add: addTwoBlock [" + toX + ", " + toY + "]=" + blockIndexArray [toX, toY]
-			+ " and [" + fromX + ", " + fromY + "]=" + blockIndexArray [fromX, fromY]);
-		if (blockIndexArray [toX, toY] != 0 && blockIndexArray [toX, toY] == blockIndexArray [fromX, fromY]) {
+		if (blockIndexArray [toX, toY] != 0 && !(toX == fromX && toY == fromY) &&
+			blockIndexArray [toX, toY] == blockIndexArray [fromX, fromY]) {
+			if(isDebug) Debug.Log ("before add: addTwoBlock [" + toX + ", " + toY + "]=" + blockIndexArray [toX, toY]
+				+ " and [" + fromX + ", " + fromY + "]=" + blockIndexArray [fromX, fromY]);
+			
 			int nextIndex = blockIndexArray [toX, toY] + 1;
 			// 销毁原来的block
 			Destroy (blockObjArray [toX, toY]);
@@ -326,16 +382,18 @@ public class GameController : MonoBehaviour {
 			createOneBlock (toX, toY, nextIndex);
 
 			blockMovedOrAdded = true;
+			if(isDebug) Debug.Log ("after add: addTwoBlock [" + toX + ", " + toY + "]=" + blockIndexArray [toX, toY]
+				+ " and [" + fromX + ", " + fromY + "]=" + blockIndexArray [fromX, fromY]);
 			return true;
 		} else {
 			return false;
 		}
-		if(isDebug) Debug.Log ("after add: addTwoBlock [" + toX + ", " + toY + "]=" + blockIndexArray [toX, toY]
-			+ " and [" + fromX + ", " + fromY + "]=" + blockIndexArray [fromX, fromY]);
 	}
 
 	// 移动一个方块
 	void moveOneBlock(int xOld,int yOld, int xNew, int yNew){
+		if(isDebug) Debug.Log ("before move: [" + xOld + ", " + yOld + "]=" + blockIndexArray [xOld, yOld]
+			+ " and [" + xNew + ", " + yNew + "]=" + blockIndexArray [xNew, yNew]);
 		GameObject block = blockObjArray [xOld, yOld];
 		if (block != null) {
 			Vector2 newPos = getBlockWorldPos (xNew, yNew);
@@ -349,5 +407,7 @@ public class GameController : MonoBehaviour {
 		blockObjArray [xOld, yOld] = null;
 
 		blockMovedOrAdded = true;
+		if(isDebug) Debug.Log ("after move: [" + xOld + ", " + yOld + "]=" + blockIndexArray [xOld, yOld]
+			+ " and [" + xNew + ", " + yNew + "]=" + blockIndexArray [xNew, yNew]);
 	}
 }
