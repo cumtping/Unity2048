@@ -2,8 +2,8 @@
 using System.Collections;
 
 public class GameController : MonoBehaviour {
-	bool testMode = true;
-	bool isDebug = true;
+	bool testMode = false;
+	bool isDebug = false;
 	float spawnDelay = 1.0F;
 	int xNum = 4, yNum = 4;
 	int blockSize = 240;
