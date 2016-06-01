@@ -2,7 +2,9 @@
   <MonoDevelop.Ide.Workspace ActiveConfiguration="Debug" PreferredExecutionTarget="Unity.Instance.Unity Editor" />
   <MonoDevelop.Ide.Workbench ActiveDocument="Assets\Scripts\GameController.cs">
     <Files>
-      <File FileName="Assets\Scripts\GameController.cs" Line="333" Column="3" />
+      <File FileName="Assets\Scripts\GameController.cs" Line="410" Column="36" />
+      <File FileName="..\..\github\NGUI-Demo\Assets\Scripts\Game\GameController.cs" Line="16" Column="23" />
+      <File FileName="..\..\github\NGUI-Demo\Assets\Scripts\Menu\MenuControler.cs" Line="18" Column="26" />
     </Files>
   </MonoDevelop.Ide.Workbench>
   <MonoDevelop.Ide.DebuggingService.Breakpoints>

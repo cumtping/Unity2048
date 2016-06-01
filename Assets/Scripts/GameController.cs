@@ -2,12 +2,13 @@
 using System.Collections;
 
 public class GameController : MonoBehaviour {
-	bool testMode = false;
+	bool testMode = true;
 	bool isDebug = true;
 	float spawnDelay = 1.0F;
 	int xNum = 4, yNum = 4;
 	int blockSize = 240;
 	int blockGap = 30;
+	string gameStatePrefName = "game_state";
 
 	public GameObject gameBoard;
 	public GameObject block1Prefab, block2Prefab, block3Prefab, block4Prefab, block5Prefab,
@@ -35,18 +36,79 @@ public class GameController : MonoBehaviour {
 
 	void Start () {
 		init ();
-		if (!testMode) {
-			spawnTwoBlock ();
-		} else {
+
+		if (testMode) {
 			spawnTestBlock ();	
+		} else {
+			if (!restoreGameState ()) {
+				spawnBlock (2);
+			}
 		}
+	}
+
+	void Update () {
+		if (Input.GetKey(KeyCode.Escape)) {
+			storeGameState ();
+			Application.Quit();
+		}
+		dealWithTouchvent ();
+	}
+
+	// 保存游戏状态
+	void storeGameState (){
+		string indexString = "";
+		for (int x = 0; x < xNum; x++) {
+			for (int y = 0; y < yNum; y++) {
+				indexString += blockIndexArray [x, y] + " ";
+			}
+		}
+		PlayerPrefs.SetString (gameStatePrefName, indexString.Trim ());
+	}
+
+	// 恢复游戏状态
+	// return true：恢复成功；false：不需要恢复
+	bool restoreGameState(){
+		string indexString = PlayerPrefs.GetString (gameStatePrefName, null);
+
+		if (indexString != null && !indexString.Equals("")) {
+			string[] indexs = indexString.Split (' ');
+			for (int i = 0; i < indexs.Length; i++) {
+				int blockIndex = int.Parse (indexs[i]);
+				if (blockIndex != 0) {
+					Vector2 position = indexToPosition (i + 1);
+					createOneBlock ((int)position.x, (int)position.y, blockIndex);
+				}
+			}
+			return true;	
+		} else {
+			return false;
+		}
+	}
+
+	// 重新开始游戏
+	public void restartGame() {
+		for (int i = 0; i < xNum; i++) {
+			for (int j = 0; j < yNum; j++) {
+				if (blockObjArray [i, j] != null) {
+					GameObject.Destroy (blockObjArray[i, j]);
+				}
+			}
+		}
+
+		blockObjArray = new GameObject[4, 4];
+		blockIndexArray = new int[4, 4];
+		blockMovedOrAdded = false;
+
+		// 生成两个方块
+		spawnBlock (2);
+		fillEmptyBlockList ();
 	}
 
 	/// <test methods>
 	void spawnTestBlock () {
 		bool testFullHorizontal = false;
-		bool testFullVertical = true;
-		bool testArray = false;
+		bool testFullVertical = false;
+		bool testArray = true;
 		int exception1 = -1;
 		int exception2 = 2;
 
@@ -65,7 +127,7 @@ public class GameController : MonoBehaviour {
 			}
 		}
 		if (testArray) {
-			int[,] indexArray = new int[4, 4]{ { 2, 3, 4, 6 }, { 1, 2, 3, 4 }, { 0, 1, 2, 3 }, { 0, 0, 0, 0 } };
+			int[,] indexArray = new int[4, 4]{ { 1, 2, 3, 4 }, { 5, 6, 7, 8 }, { 9, 11, 12, 13 }, { 14, 15, 16, 0 } };
 			initGameBoard (indexArray);
 		}
 	}
@@ -95,10 +157,6 @@ public class GameController : MonoBehaviour {
 			block16Prefab, block17Prefab, block18Prefab, block19Prefab, block20Prefab};
 
 		fillEmptyBlockList ();
-	}
-
-	void Update () {
-		dealWithTouchvent ();
 	}
 
 	// 处理滑动事件
@@ -132,17 +190,25 @@ public class GameController : MonoBehaviour {
 				}
 				fillEmptyBlockList ();
 
-				if (isDebug) Debug.Log ("=========END===================================");
-				if (!testMode && blockMovedOrAdded) {
-					StartCoroutine (waitAndSpawnTwoBlock (spawnDelay));
+				if (blockMovedOrAdded) {
+					StartCoroutine (waitAndSpawnBlock (spawnDelay));
 				}
+
+				if (isDebug) Debug.Log ("=========END===================================");
 			}
 		}
 	}
 
-	IEnumerator waitAndSpawnTwoBlock(float waitTime){
+	void showGameOverDialog(){
+		if (isDebug) Debug.Log ("================ Game Over ==============");
+	}
+
+	IEnumerator waitAndSpawnBlock(float waitTime){
 		yield return new WaitForSeconds(waitTime);  
-		spawnTwoBlock ();
+		spawnBlock (1);
+		if (isGameOver ()) {
+			showGameOverDialog ();	
+		}
 	}
 
 	// 将空白方块编号存入emptyBlockList
@@ -179,8 +245,8 @@ public class GameController : MonoBehaviour {
 	}
 
 	// 生成标2的方格，若成功生成返回true；若没有空间返回false;
-	bool spawnTwoBlock() {
-		for (int i = 1; i <= 2; i++) {
+	bool spawnBlock(int num) {
+		for (int i = 1; i <= num; i++) {
 			Vector2 position = indexToPosition (pickOneEmptyBlock ());
 			if ((int)position.x != -1) {
 				createOneBlock ((int)position.x, (int)position.y, 1);
@@ -223,15 +289,22 @@ public class GameController : MonoBehaviour {
 	// 判断游戏是否已结束（不能消除且没有剩余的空间）
 	bool isGameOver() {
 		bool gameOver = true;
-		for (int i = 0; i < xNum; i++) {
-			for (int j = 0; j < yNum; j++) {
-				if (blockIndexArray [i, j] == 0) {
-					gameOver = false;
+		if (emptyBlockList.Count > 0) {
+			gameOver = false;
+		} else {
+			for (int i = 0; i < xNum; i++) {
+				for (int j = 0; j < yNum; j++) {
+					if ((j != yNum - 1 && blockIndexArray [i, j] == blockIndexArray [i, j + 1]) ||
+					   (j != 0 && blockIndexArray [i, j] == blockIndexArray [i, j - 1]) ||
+					   (i != xNum - 1 && blockIndexArray [i, j] == blockIndexArray [i + 1, j]) ||
+					   (i != 0 && blockIndexArray [i, j] == blockIndexArray [i - 1, j])) {
+						gameOver = false;
+						break;
+					}
+				}
+				if (!gameOver) {
 					break;
 				}
-			}
-			if (!gameOver) {
-				break;
 			}
 		}
 
@@ -352,7 +425,7 @@ public class GameController : MonoBehaviour {
 			}
 
 			for (int x = 1; x < xNum; x++) {
-				if (blockIndexArray [x, y] != null) {
+				if (blockIndexArray [x, y] != 0) {
 					for (int i = 0; i < x; i++) {
 						if (0 == blockIndexArray [i, y]) {
 							moveOneBlock (x, y, i, y);
@@ -410,4 +483,6 @@ public class GameController : MonoBehaviour {
 		if(isDebug) Debug.Log ("after move: [" + xOld + ", " + yOld + "]=" + blockIndexArray [xOld, yOld]
 			+ " and [" + xNew + ", " + yNew + "]=" + blockIndexArray [xNew, yNew]);
 	}
+
+
 }
