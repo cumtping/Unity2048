@@ -167,7 +167,7 @@ public class GameController : MonoBehaviour {
 			Vector2 upPos = Input.mousePosition;
 			float moveX = upPos.x - mouseDownPos.x;
 			float moveY = upPos.y - mouseDownPos.y;
-			if (Mathf.Abs (moveX) > 10 && Mathf.Abs (moveY) > 10) {
+			if (Mathf.Abs (moveX) > 10 || Mathf.Abs (moveY) > 10) {
 				blockMovedOrAdded = false;
 				if (isDebug) Debug.Log ("=========START===================================");
 
